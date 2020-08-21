@@ -1,0 +1,128 @@
+今天給大家介紹如何在ubantu-18.04裡正確的安裝bugzilla和配置mysql-server5.4
+
+一、進入root後進行安裝需要的組件
+$ sudo su 
+# apt-get -y install git nano vim
+
+# apt-get -y install apache2 mysql-server libappconfig-perl libdate-calc-perl libtemplate-perl  build-essential libdatetime-timezone-perl libdatetime-perl libemail-sender-perl libemail-mime-perl libemail-mime-modifier-perl libdbi-perl libdbd-mysql-perl libcgi-pm-perl libmath-random-isaac-perl  libmath-random-isaac-xs-perl  libapache2-mod-perl2 libapache2-mod-perl2-dev libchart-perl libxml-perl libxml-twig-perl perlmagick libgd-graph-perl libtemplate-plugin-gd-perl libsoap-lite-perl libhtml-scrubber-perl libjson-rpc-perl libdaemon-generic-perl libtheschwartz-perl libtest-taint-perl libauthen-radius-perl libfile-slurp-perl libencode-detect-perl libmodule-build-perl libnet-ldap-perl libfile-which-perl libauthen-sasl-perl libfile-mimeinfo-perl libhtml-formattext-withlinks-perl libgd-dev libmysqlclient-dev graphviz python-sphinx rst2pdf
+
+二、完成安裝後我們開始下載bugzilla-5.0.6，請使用下面的命令
+# wget https://ftp.mozilla.org/pub/mozilla.org/webtools/bugzilla-5.0.6.tar.gz
+
+三、下面我們開始創建bugzilla的數據庫，請使用下面的命令
+
+# mysql -u root -p
+根據提示複製下面的內容
+注意："StrongP@ssword"必須由大小寫字母和數字和特殊符號組成，否則提示語法錯誤。
+mysql> grant all on bugs.* to root@localhost identified by "StrongP@ssword";
+mysql> grant all on bugs.* to bugs@localhost identified by "StrongP@ssword";
+mysql> show databases;
++--------------------+
+| Database           |
++--------------------+
+| information_schema |
+| bugs               |
+| mysql              |
+| performance_schema |
+| sys                |
++--------------------+
+5 rows in set (0.00 sec)
+
+mysql> select host, user from mysql.user;
++-----------+----------------+
+| host      | user           |
++-----------+----------------+
+| %         | bugs@localhost |
+| localhost | mysql.session  |
+| localhost | mysql.sys      |
+| localhost | root           |
++-----------+----------------+
+4 rows in set (0.00 sec)
+
+mysql> GRANT ALL PRIVILEGES ON bugs.* TO 'bugs'@'localhost' WITH GRANT Option;
+Query OK, 0 rows affected (0.01 sec)
+
+mysql> GRANT ALL PRIVILEGES ON DATABASENAME.* To 'bugs'@'localhost' IDENTIFIED BY 'StrongP@ssword';
+
+mysql> flush privileges;
+
+mysql> exit;
+
+四、使用下面命令解壓bugzilla-5.0.6到/var/www/html下。
+# tar -zxvf bugzilla-5.0.6.tar.gz -C /var/www/html
+
+五、下面我們檢查所需要的模塊，請使用下面的命令。
+# cd/var/www/html/bugzilla-5.0.6 
+root@ubuntu:/var/www/html/bugzilla-5.0.6# perl checksetup.pl
+
+檢測後我們會看到很多魔門沒有安裝的模塊，我們運行下面的命令來安裝我們需要的模塊
+# apt-get install libdbd-mysql-perl
+再次運行程序安裝所有的必要模塊
+/usr/bin/perl install-module.pl --all
+
+六、我們對localconfig文件進行必要的修改，使用下面的命令進入文件，並按照下面的內容修改
+/var/www/html/bugzilla-5.0.6# vim localconfig
+找到下面內容並修改為
+
+原始$webservergroup = 'apache'  修改為 $webservergroup = 'www-data';
+原始$db_pass = 'StrongP@ssword' 修改為 $db_pass = '你之前設定的密碼';
+
+然後在運行檢查模塊的命令
+root@ubuntu:/var/www/html/bugzilla-5.0.6# perl checksetup.pl
+
+七、我們首先創建空白bugzilla.conf文件，然後並複製下面內容到bugzilla.conf裡。
+
+# vim /etc/apache2/sites-available/bugzilla.conf
+
+<VirtualHost *:80>
+ServerAdmin admin@example.com
+DocumentRoot /var/www/html/bugzilla/
+ServerName bugzilla.example.com
+ServerAlias www.example.com
+<Directory /var/www/html/bugzilla/>
+AddHandler cgi-script .cgi
+Options +Indexes +ExecCGI
+DirectoryIndex index.cgi
+AllowOverride Limit FileInfo Indexes Options AuthConfig
+</Directory>
+ErrorLog /var/log/apache2/bugzilla.example.com-error_log
+CustomLog /var/log/apache2/bugzilla.example.com-access_log common
+</VirtualHost>
+
+八、接下來運行所需要的服務和模塊。
+# sudo a2ensite bugzilla
+# sudo a2dissite 000-default
+# sudo a2enmod cgi headers expires rewrite
+# sudo systemctl restart apache2
+
+九、確保為bugzilla-5.0.6創建別名，使用下面命令。
+# ln -s /var/www/html/bugzilla-5.0.6/ /var/www/html/bugzilla
+
+十、查看apache2服務知否運行正常。請使用下面的命令。
+root@ubuntu:/var/www/html/bugzilla-5.0.6# systemctl status apache2.service
+如果正常應出現下面的內容：
+? apache2.service - The Apache HTTP Server
+   Loaded: loaded (/lib/systemd/system/apache2.service; enabled; vendor preset: enabled)
+  Drop-In: /lib/systemd/system/apache2.service.d
+           +-apache2-systemd.conf
+   Active: active (running) since Mon 2020-07-27 11:07:37 PDT; 57s ago
+  Process: 27285 ExecStop=/usr/sbin/apachectl stop (code=exited, status=1/FAILURE)
+  Process: 27302 ExecStart=/usr/sbin/apachectl start (code=exited, status=0/SUCCESS)
+ Main PID: 27306 (/usr/sbin/apach)
+    Tasks: 56 (limit: 2295)
+   CGroup: /system.slice/apache2.service
+           +-27306 /usr/sbin/apache2 -k start
+           +-27307 /usr/sbin/apache2 -k start
+           +-27308 /usr/sbin/apache2 -k start
+           +-27309 /usr/sbin/apache2 -k start
+
+Jul 27 11:07:37 ubuntu systemd[1]: Starting The Apache HTTP Server...
+Jul 27 11:07:37 ubuntu apachectl[27302]: AH00558: apache2: Could not reliably determine the server's fully qualified domain name, usi
+Jul 27 11:07:37 ubuntu systemd[1]: Started The Apache HTTP Server.
+lines 1-18/18 (END)
+
+使用下面命令檢查bugzilla是否運行正常，或者打開網頁輸入你的ubantu的ip地址就能看到bugzilla界面了
+
+root@ubuntu:/var/www/html/bugzilla# ./testserver.pl http://localhost
+
+如果對大家有幫助請分享。
