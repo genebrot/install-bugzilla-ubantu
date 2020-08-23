@@ -1,4 +1,7 @@
-今天給大家介紹如何在ubantu-18.04裡正確的安裝bugzilla和配置mysql-server5.4
+There are many articles on installing Bugzilla on the Internet, but there are also many mistakes, and today we bring you the exact installation of Bugzilla in Ubantu 
+and how to configure mysql
+
+今天給大家介紹如何在ubantu裡正確的安裝bugzilla和配置mysql-server5.4
 
 一、進入root後進行安裝需要的組件
 $ sudo su 
@@ -125,4 +128,5 @@ lines 1-18/18 (END)
 
 root@ubuntu:/var/www/html/bugzilla# ./testserver.pl http://localhost
 
+Please share if it helps.thanks！
 如果對大家有幫助請分享。
